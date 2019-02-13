@@ -8,18 +8,19 @@
 #     5、抢购时为了防止一次网络拥堵出问题，设置了尝试机制，会不停尝试提交订单，直到提交成功或达到最大重试次数为止#
 #     6、脚本只负责提交订单，之后24小时内需要自行完成付款操作。                                                  #
 ##################################################################################################################
+
 import os
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 import datetime
 import time
 import random
-
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 # ==== 设定抢购时间 （修改此处，指定抢购时间点）====
-BUY_TIME = "2018-10-14 19:31:30"
-
-
+BUY_TIME = "2019-02-13 17:40:00"
 
 # ====  标识登录状态、重试次数 ====
 MAX_LOGIN_RETRY_TIMES = 6
@@ -29,16 +30,18 @@ login_success = False
 buy_time_object = datetime.datetime.strptime(BUY_TIME, '%Y-%m-%d %H:%M:%S')
 
 now_time = datetime.datetime.now()
+
 if now_time > buy_time_object:
     print("当前已过抢购时间，请确认抢购时间是否填错...")
     exit(0)
 
 print("正在打开chrome浏览器...")
-#让浏览器不要显示当前受自动化测试工具控制的提醒
+# 让浏览器不要显示当前受自动化测试工具控制的提醒
 option = webdriver.ChromeOptions()
 option.add_argument('disable-infobars')
-driver = webdriver.Chrome(chrome_options=option)
+driver = webdriver.Chrome(options=option)
 driver.maximize_window()
+wait=WebDriverWait(driver, 300)
 print("chrome浏览器已经打开...")
 
 
@@ -57,6 +60,7 @@ def __login_operates():
         login_success = True
         current_retry_login_times = 0
 
+
 def login():
     print("开始尝试登录...")
     __login_operates()
@@ -74,15 +78,14 @@ def login():
     if not login_success:
         print("规定时间内没有扫码登录淘宝成功，执行失败，退出脚本!!!")
         exit(0);
-    
-
 
     # time.sleep(3)
     now = datetime.datetime.now()
     print('login success:', now.strftime('%Y-%m-%d %H:%M:%S'))
 
+
 def __refresh_keep_alive():
-    #重新加载购物车页面，定时操作，防止长时间不操作退出登录
+    # 重新加载购物车页面，定时操作，防止长时间不操作退出登录
     driver.get("https://cart.taobao.com/cart.htm")
     print("刷新购物车界面，防止登录超时...")
     time.sleep(60)
@@ -97,16 +100,14 @@ def keep_login_and_wait():
         else:
             print("抢购时间点将近，停止自动刷新，准备进入抢购阶段...")
             break
-    
-
 
 
 def buy():
-    #打开购物车
+    # 打开购物车
     driver.get("https://cart.taobao.com/cart.htm")
     time.sleep(1)
- 
-    #点击购物车里全选按钮
+
+    # 点击购物车里全选按钮
     if driver.find_element_by_id("J_SelectAll1"):
         driver.find_element_by_id("J_SelectAll1").click()
         print("已经选中购物车中全部商品 ...")
@@ -127,7 +128,7 @@ def buy():
             retry_submit_times = retry_submit_times + 1
 
             try:
-                #点击结算按钮
+                # 点击结算按钮
                 if driver.find_element_by_id("J_Go"):
                     driver.find_element_by_id("J_Go").click()
                     print("已经点击结算按钮...")
@@ -135,14 +136,18 @@ def buy():
                     while True:
                         try:
                             if click_submit_times < 10:
-                                driver.find_element_by_link_text('提交订单').click()
+                                # driver.find_element_by_link_text('提交订单').click()
+                                # 淘宝更新了反爬机制
+                                driver.execute_script("window.scrollTo(0,document.body.scrollHeight)")
+                                buy_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#submitOrder_1 > div > a.go-btn')))
+                                buy_btn.click()
                                 print("已经点击提交订单按钮")
                                 submit_succ = True
                                 break
                             else:
                                 print("提交订单失败...")
                         except Exception as ee:
-                            #print(ee)
+                            print(ee)
                             print("没发现提交订单按钮，可能页面还没加载出来，重试...")
                             click_submit_times = click_submit_times + 1
                             time.sleep(0.1)
@@ -156,4 +161,3 @@ def buy():
 login()
 keep_login_and_wait()
 buy()
- 
